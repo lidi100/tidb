@@ -412,7 +412,11 @@ func resolveLocks(ctx goctx.Context, store *tikvStore, safePoint uint64, identif
 		if err != nil {
 			return errors.Trace(err)
 		}
+		tempTime := time.Now()
 		resp, err := store.SendReq(bo, req, loc.Region, readTimeoutMedium)
+		store.lockResolver.costFetchLock += time.Since(tempTime)
+		store.lockResolver.cntFetchLock += 1
+		log.Errorf("[gc worker] takes %v to perform a scan lock command", time.Since(tempTime))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -439,7 +443,11 @@ func resolveLocks(ctx goctx.Context, store *tikvStore, safePoint uint64, identif
 		for i := range locksInfo {
 			locks[i] = newLock(locksInfo[i])
 		}
+
 		ok, err1 := store.lockResolver.ResolveLocks(bo, locks)
+		log.Errorf("[gc worker] looks up %v TxnStatus at the cost of %v, and resolves %v locks at the cost of %v", 
+			store.lockResolver.cntTxnStatus, store.lockResolver.costTxnStatus, store.lockResolver.cntClearLock, store.lockResolver.costClearLock)
+		log.Errorf("[gc worker] consumes the cost of %v", time.Since(startTime))
 		if err1 != nil {
 			return errors.Trace(err1)
 		}
